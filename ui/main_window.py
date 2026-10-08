@@ -141,17 +141,17 @@ class MainWindow(QMainWindow):
         self.time_lived = datetime.now() - self.selected_guest.check_in
         total_minutes = int(self.time_lived.total_seconds() // 60)
         hours = total_minutes // 60
-        minutes = total_minutes % 60
         self.selected_guest.calculate_debt(hours)
+        minutes = total_minutes % 60
         self.name_label.setText(f"Имя: {self.selected_guest.name}")
         self.guest_room_label.setText(f"Проживает в комнате №{selected_room.number} '{selected_room.room_type}'")
         self.check_in_label.setText(f"Время заселения: {self.selected_guest.check_in.strftime('%H:%M:%S')}")
-        self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
-        self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
-        self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
         #self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
         #self.stone_label.setText(f"Камень: {self.selected_guest.payment["stone"]}")
         #self.metal_label.setText(f"Металл: {self.selected_guest.payment["metal"]}")
+        self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
+        self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
+        self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
 
         self.time_lived_label.setText(f"Прожил: {hours}ч {minutes}м")
 
