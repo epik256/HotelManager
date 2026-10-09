@@ -8,12 +8,13 @@ from PyQt5.QtWidgets import (
     QPushButton, QListWidgetItem,
     QDialog,
     QLineEdit,
-    QComboBox
+    QComboBox, QStackedWidget
 )
 from PyQt5.QtCore import Qt
 
 from datetime import datetime
 from guest import Guest
+
 from manager import Manager
 from room import Room
 
@@ -64,10 +65,17 @@ class MainWindow(QMainWindow):
         #Правая часть
         col2 = QVBoxLayout()
 
-        guest_info = QLabel("ИНФОРМАЦИЯ О ГОСТЕ")
-        room_info = QLabel("ИНФОРМАЦИЯ О НОМЕРЕ")
+        self.info_stack = QStackedWidget()
+
+        info_label = QLabel("ИНФОРМАЦИЯ")
+
+
+
+
 
         #Информация гостя
+        guest_page = QWidget()
+        guest_layout = QVBoxLayout()
         self.name_label = QLabel()
         self.wood_label = QLabel()
         self.stone_label = QLabel()
@@ -77,30 +85,47 @@ class MainWindow(QMainWindow):
         self.time_lived_label = QLabel()
 
         #Информация комнаты
+        room_page = QWidget()
+        room_layout = QVBoxLayout()
         self.room_number = QLabel()
         self.room_type = QLabel()
         self.room_password = QLabel()
         self.room_guests = QLabel()
 
         self.change_button = QPushButton("Изменить")
+        self.delete_button = QPushButton("Удалить")
 
-        col2.addWidget(guest_info)
-        col2.addWidget(self.name_label)
-        col2.addWidget(self.guest_room_label)
-        col2.addWidget(self.check_in_label)
-        col2.addWidget(self.time_lived_label)
-        col2.addWidget(self.wood_label)
-        col2.addWidget(self.stone_label)
-        col2.addWidget(self.metal_label)
-        col2.addWidget(room_info)
-        col2.addWidget(self.room_number)
-        col2.addWidget(self.room_type)
-        col2.addWidget(self.room_password)
-        col2.addWidget(self.room_guests)
+
+        #Добавляю все
+
+        guest_layout.addWidget(self.name_label)
+        guest_layout.addWidget(self.guest_room_label)
+        guest_layout.addWidget(self.check_in_label)
+        guest_layout.addWidget(self.time_lived_label)
+        guest_layout.addWidget(self.wood_label)
+        guest_layout.addWidget(self.stone_label)
+        guest_layout.addWidget(self.metal_label)
+
+        room_layout.addWidget(self.room_number)
+        room_layout.addWidget(self.room_type)
+        room_layout.addWidget(self.room_password)
+        room_layout.addWidget(self.room_guests)
+
+        col2.addWidget(info_label)
+        col2.addWidget(self.info_stack, 1)
+
+
 
         col2.addWidget(self.change_button)
-
+        col2.addWidget(self.delete_button)
         # Связь
+        guest_page.setLayout(guest_layout)
+        room_page.setLayout(room_layout)
+
+        self.info_stack.addWidget(guest_page)
+        self.info_stack.addWidget(room_page)
+
+
         master.addLayout(col1, 60)
         master.addLayout(col2, 40)
 
@@ -124,9 +149,19 @@ class MainWindow(QMainWindow):
 
         self.guests_list.itemClicked.connect(self.guest_clicked)
         self.rooms_list.itemClicked.connect(self.room_clicked)
-        self.change_button.clicked.connect(self.check)
+        self.change_button.clicked.connect(self.change_check)
+        self.delete_button.clicked.connect(self.delete_check)
 
-    def check(self):
+    def delete_check(self):
+
+        if self.check_object == 0:
+            self.delete_guest()
+        elif self.check_object == 1:
+            self.delete_room()
+        else:
+            print("Выберите что удалить")
+
+    def change_check(self):
         if self.check_object == 0:
             self.change_guest()
         elif self.check_object == 1:
@@ -135,6 +170,7 @@ class MainWindow(QMainWindow):
             print("Выберите что изменить")
 
     def guest_clicked(self, item):
+        self.info_stack.setCurrentIndex(0)
         self.selected_guest = item.data(Qt.UserRole)
         self.check_object = 0
         selected_room = self.selected_guest.room
@@ -145,7 +181,7 @@ class MainWindow(QMainWindow):
         minutes = total_minutes % 60
         self.name_label.setText(f"Имя: {self.selected_guest.name}")
         self.guest_room_label.setText(f"Проживает в комнате №{selected_room.number} '{selected_room.room_type}'")
-        self.check_in_label.setText(f"Время заселения: {self.selected_guest.check_in.strftime('%H:%M:%S')}")
+        self.check_in_label.setText(f"Время заселения: {self.selected_guest.check_in.strftime('%H:%M')}")
         #self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
         #self.stone_label.setText(f"Камень: {self.selected_guest.payment["stone"]}")
         #self.metal_label.setText(f"Металл: {self.selected_guest.payment["metal"]}")
@@ -295,7 +331,51 @@ class MainWindow(QMainWindow):
         dialog.setLayout(layout)
         dialog.exec_()
 
+    def delete_guest(self):
+        dialog = QDialog()
+        dialog.setWindowTitle("Удалить")
+
+        layout = QVBoxLayout()
+        label_layout = QHBoxLayout()
+        button_layout = QHBoxLayout()
+
+        yes_button = QPushButton("Да")
+        no_button = QPushButton("Нет")
+
+        sure_label = QLabel(f"Вы уверены что хотите удалить {self.selected_guest.name}?")
+
+        def yes():
+            item = self.guests_list.currentItem()
+            self.manager.total_guests.remove(self.selected_guest)
+            self.guests_list.takeItem(self.guests_list.row(item))
+            self.selected_guest.room.guest = None
+            self.name_label.setText("")
+            self.guest_room_label.setText("")
+            self.check_in_label.setText("")
+            self.wood_label.setText("")
+            self.stone_label.setText("")
+            self.metal_label.setText("")
+            self.time_lived_label.setText("")
+            dialog.accept()
+
+        def no():
+            dialog.accept()
+
+        yes_button.clicked.connect(yes)
+        no_button.clicked.connect(no)
+
+        label_layout.addWidget(sure_label)
+        button_layout.addWidget(yes_button)
+        button_layout.addWidget(no_button)
+
+        layout.addLayout(label_layout)
+        layout.addLayout(button_layout)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
     def room_clicked(self, item):
+        self.info_stack.setCurrentIndex(1)
         self.selected_room = item.data(Qt.UserRole)
         self.check_object = 1
         self.room_number.setText(f"Номер: {self.selected_room.number}")
@@ -389,5 +469,61 @@ class MainWindow(QMainWindow):
         h3.addWidget(type_label)
         h3.addWidget(combo)
         layout.addWidget(self.add_button)
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+
+    def delete_room(self):
+        dialog = QDialog()
+        dialog.setWindowTitle("Удалить")
+
+        layout = QVBoxLayout()
+        label_layout = QHBoxLayout()
+        button_layout = QHBoxLayout()
+
+        yes_button = QPushButton("Да")
+        no_button = QPushButton("Нет")
+
+        sure_label = QLabel(f"Вы уверены что хотите удалить {self.selected_room.number} комнату?")
+
+        def yes():
+            item = self.rooms_list.currentItem()
+            if self.selected_room.guest is None:
+                Manager.rooms.remove(self.selected_room)
+                self.rooms_list.takeItem(self.rooms_list.row(item))
+                self.room_number.setText("")
+                self.room_type.setText("")
+                self.room_password.setText("")
+                self.room_guests.setText("")
+                dialog.accept()
+            else:
+                new_room = Manager.find_free_room(self.selected_room.room_type)
+                if new_room is None:
+                    print("Перед удалением этой комнаты, создайте комнату для текущего жителя такого же типа")
+                    dialog.accept()
+                elif not new_room is None:
+                    homeless = self.selected_room.guest
+                    Manager.rooms.remove(self.selected_room)
+                    self.rooms_list.takeItem(self.rooms_list.row(item))
+                    homeless.room = new_room
+                    new_room.guest = homeless
+                    self.room_number.setText("")
+                    self.room_type.setText("")
+                    self.room_password.setText("")
+                    self.room_guests.setText("")
+                    dialog.accept()
+        def no():
+            dialog.accept()
+
+        yes_button.clicked.connect(yes)
+        no_button.clicked.connect(no)
+
+        label_layout.addWidget(sure_label)
+        button_layout.addWidget(yes_button)
+        button_layout.addWidget(no_button)
+
+        layout.addLayout(label_layout)
+        layout.addLayout(button_layout)
+
         dialog.setLayout(layout)
         dialog.exec_()
