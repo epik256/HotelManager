@@ -8,15 +8,19 @@ from PyQt5.QtWidgets import (
     QPushButton, QListWidgetItem,
     QDialog,
     QLineEdit,
-    QComboBox, QStackedWidget
+    QComboBox,
+    QStackedWidget,
+    QMessageBox
 )
 from PyQt5.QtCore import Qt
 
 from datetime import datetime
-from guest import Guest
 
+from guest import Guest
 from manager import Manager
 from room import Room
+from ui.style_sheets import DIALOG_STYLE, MAIN_STYLE
+
 
 class MainWindow(QMainWindow):
 
@@ -29,6 +33,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Hotel Manager")
         self.resize(1000, 700)
         self.init_ui()
+        self.setStyleSheet(MAIN_STYLE)
 
     def init_ui(self):
         #Центральный виджет
@@ -195,6 +200,7 @@ class MainWindow(QMainWindow):
 
             dialog = QDialog()
             dialog.setWindowTitle("Изменить плату")
+            dialog.setStyleSheet(DIALOG_STYLE)
 
             layout = QVBoxLayout()
             h1 = QHBoxLayout()
@@ -227,9 +233,18 @@ class MainWindow(QMainWindow):
                     self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
                     self.stone_label.setText(f"Камень: {self.selected_guest.payment["stone"]}")
                     self.metal_label.setText(f"Металл: {self.selected_guest.payment["metal"]}")
+                    QMessageBox.information(
+                        dialog,
+                        "Успешно",
+                        "Гость был успешно изменен!"
+                    )
                     dialog.accept()
                 else:
-                    print("Вы ввели неккоректные данные")
+                    QMessageBox.warning(
+                        dialog,
+                        "Ошибка",
+                        "Вы ввели некорректные данные"
+                    )
 
             self.acchange_button.clicked.connect(change)
 
@@ -252,6 +267,7 @@ class MainWindow(QMainWindow):
         #Создаю окно
         dialog = QDialog()
         dialog.setWindowTitle("Добавить гостя")
+        dialog.setStyleSheet(DIALOG_STYLE)
 
         #Вертикальная строка виджетов
         layout = QVBoxLayout()
@@ -291,7 +307,11 @@ class MainWindow(QMainWindow):
                 room_type = combo.currentText()
                 room = Manager.find_free_room(room_type)
                 if room is None:
-                    print("Такой комнаты нет")
+                    QMessageBox.warning(
+                        dialog,
+                        "Ошибка",
+                        "Комнаты с таким типом нет. Измените тип комнаты либо добавьте новую"
+                    )
                 else:
                     guest = Guest(name)
                     self.manager.total_guests.append(guest)
@@ -305,9 +325,18 @@ class MainWindow(QMainWindow):
                     guest.room = room
                     room.guest = guest
                     self.room_guests.setText(f"Проживает: {guest.name}")
+                    QMessageBox.information(
+                        dialog,
+                        "Успешно",
+                        "Гость был успешно добавлен!"
+                    )
                     dialog.accept()
             else:
-                print("Вы ввели неккоректные данные")
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка ввода",
+                    "Проверьте правильность введённых данных!"
+                )
 
         self.add_button.clicked.connect(add)
 
@@ -334,6 +363,7 @@ class MainWindow(QMainWindow):
     def delete_guest(self):
         dialog = QDialog()
         dialog.setWindowTitle("Удалить")
+        dialog.setStyleSheet(DIALOG_STYLE)
 
         layout = QVBoxLayout()
         label_layout = QHBoxLayout()
@@ -356,6 +386,11 @@ class MainWindow(QMainWindow):
             self.stone_label.setText("")
             self.metal_label.setText("")
             self.time_lived_label.setText("")
+            QMessageBox.information(
+                dialog,
+                "Успешно",
+                "Гость был успешно удален!"
+            )
             dialog.accept()
 
         def no():
@@ -386,6 +421,7 @@ class MainWindow(QMainWindow):
     def change_room(self):
         dialog = QDialog()
         dialog.setWindowTitle("Изменить пароль")
+        dialog.setStyleSheet(DIALOG_STYLE)
 
         layout = QHBoxLayout()
 
@@ -399,9 +435,18 @@ class MainWindow(QMainWindow):
             if password_line.text().isdigit() and len(password_line.text()) == 4:
                 self.selected_room.password = password_line.text()
                 self.room_password.setText(f"Пароль: {self.selected_room.password}")
+                QMessageBox.information(
+                    dialog,
+                    "Успех",
+                    "Пароль изменен!"
+                )
                 dialog.accept()
             else:
-                print("Пароль должен состоять из 4 цифр")
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка ввода",
+                    "Пароль должен состоять из 4 цифр!"
+                )
 
         self.acchange_button.clicked.connect(change)
 
@@ -415,6 +460,8 @@ class MainWindow(QMainWindow):
     def add_room(self):
         dialog = QDialog()
         dialog.setWindowTitle("Добавить комнату")
+        dialog.setStyleSheet(DIALOG_STYLE)
+
 
         #Строки
         layout = QVBoxLayout()
@@ -445,7 +492,11 @@ class MainWindow(QMainWindow):
             room_type = combo.currentText()
             if number.isdigit() and password.isdigit() and len(password) == 4:
                 if any(str(r.number) == number for r in self.manager.rooms):
-                    print("Комната с таким номером уже есть")
+                    QMessageBox.warning(
+                        dialog,
+                        "Ошибка",
+                        "Комната с таким номером уже есть!"
+                    )
                     return
                 else:
                     room = Room(number, room_type)
@@ -455,10 +506,18 @@ class MainWindow(QMainWindow):
                     item.setData(Qt.UserRole, room)
                     self.rooms_list.addItem(item)
                     item.setText(f"{self.rooms_list.count()}: {room.room_type}")
-
+                    QMessageBox.information(
+                        dialog,
+                        "Успех",
+                        "Комната добавлена!"
+                    )
                     dialog.accept()
             else:
-                print("низя")
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка",
+                    "Проверьте правильность введённых данных!"
+                )
 
         self.add_button.clicked.connect(add)
 
@@ -476,6 +535,7 @@ class MainWindow(QMainWindow):
     def delete_room(self):
         dialog = QDialog()
         dialog.setWindowTitle("Удалить")
+        dialog.setStyleSheet(DIALOG_STYLE)
 
         layout = QVBoxLayout()
         label_layout = QHBoxLayout()
@@ -495,11 +555,20 @@ class MainWindow(QMainWindow):
                 self.room_type.setText("")
                 self.room_password.setText("")
                 self.room_guests.setText("")
+                QMessageBox.information(
+                    dialog,
+                    "Успех",
+                    "Комната удалена!"
+                )
                 dialog.accept()
             else:
                 new_room = Manager.find_free_room(self.selected_room.room_type)
                 if new_room is None:
-                    print("Перед удалением этой комнаты, создайте комнату для текущего жителя такого же типа")
+                    QMessageBox.warning(
+                        dialog,
+                        "Ошибка",
+                        "Перед удалением этой комнаты, создайте комнату для текущего жителя такого же типа"
+                    )
                     dialog.accept()
                 elif not new_room is None:
                     homeless = self.selected_room.guest
@@ -511,6 +580,11 @@ class MainWindow(QMainWindow):
                     self.room_type.setText("")
                     self.room_password.setText("")
                     self.room_guests.setText("")
+                    QMessageBox.information(
+                        dialog,
+                        "Успех",
+                        "Комната удалена!"
+                    )
                     dialog.accept()
         def no():
             dialog.accept()
