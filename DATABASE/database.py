@@ -6,7 +6,7 @@ from guest import Guest
 conn = psycopg2.connect(
     dbname="rustHotel",
     user="postgres",
-    password="r2o5o6t",
+    password="go0ni1ng",
     host="localhost",  # Change to your server if needed
     port="5432"  # Default PostgreSQL port
 )
