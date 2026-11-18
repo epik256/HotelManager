@@ -18,9 +18,4 @@ class Guest:
     def __repr__(self):
         return f"({self.name}({self.guest_id}) живет в {self.room_id}; заселился: {self.check_in.strftime('%H:%M')} {self.check_out}, Долг:{self.debt})"
 
-    def calculate_debt(self, hours):
-        self.debt["wood"] = hours * self.payment["wood"]
-        self.debt["stone"] = hours * self.payment["stone"]
-        self.debt["metal"] = hours * self.payment["metal"]
-
 

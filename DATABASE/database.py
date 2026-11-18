@@ -1,14 +1,18 @@
 import psycopg2
 from room import Room
 from guest import Guest
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 #Подключаю датабазу
 conn = psycopg2.connect(
-    dbname="rustHotel",
-    user="postgres",
-    password="go0ni1ng",
-    host="localhost",  # Change to your server if needed
-    port="5432"  # Default PostgreSQL port
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST"),  # Change to your server if needed
+    port=os.getenv("DB_PORT")  # Default PostgreSQL port
 )
 
 # cur = conn.cursor()
