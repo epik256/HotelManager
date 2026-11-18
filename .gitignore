@@ -5,3 +5,4 @@ venv/
 .venv/
 maintest.py
 test.py
+.env

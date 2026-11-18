@@ -14,10 +14,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from guest import Guest
-from manager import Manager
 from room import Room
 from ui.style_sheets import DIALOG_STYLE, MAIN_STYLE
 
@@ -27,6 +26,7 @@ class MainWindow(QMainWindow):
     def __init__(self, manager):
         super().__init__()
 
+        self.selected_room = None
         self.manager = manager
         self.selected_guest = None
         self.check_object = 2
@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         guest_page = QWidget()
         guest_layout = QVBoxLayout()
         self.name_label = QLabel()
+        self.id_label = QLabel()
         self.wood_label = QLabel()
         self.stone_label = QLabel()
         self.metal_label = QLabel()
@@ -113,6 +114,7 @@ class MainWindow(QMainWindow):
         #Добавляю все
 
         guest_layout.addWidget(self.name_label)
+        guest_layout.addWidget(self.id_label)
         guest_layout.addWidget(self.guest_room_label)
         guest_layout.addWidget(self.check_in_label)
         guest_layout.addWidget(self.time_lived_label)
@@ -149,19 +151,20 @@ class MainWindow(QMainWindow):
         for guest in self.manager.total_guests:
 
             item = QListWidgetItem()
-            item.setText(f"{index + 1}: {guest.name}")
+            item.setText(f"{guest.name}: Д/ч:{guest.payment["wood"]}, К/ч:{guest.payment["stone"]}, М/ч: {guest.payment["metal"]}")
             item.setData(Qt.UserRole, guest)
             self.guests_list.addItem(item)
             index += 1
 
-        room_index = 0
+
         for room in self.manager.rooms:
 
             item = QListWidgetItem()
-            item.setText(f"{room_index + 1}: {room.room_type}")
+            item.setText(f"№ {room.number} — {room.room_type}")
             item.setData(Qt.UserRole, room)
-            self.rooms_list.addItem(item)
-            room_index += 1
+            if room.is_active == True:
+                self.rooms_list.addItem(item)
+
 
         self.guests_list.itemClicked.connect(self.guest_clicked)
         self.rooms_list.itemClicked.connect(self.room_clicked)
@@ -209,12 +212,13 @@ class MainWindow(QMainWindow):
         self.selected_guest = item.data(Qt.UserRole)
         self.check_object = 0
         selected_room = self.selected_guest.room
-        self.time_lived = datetime.now() - self.selected_guest.check_in
+        now_utc = datetime.now(timezone.utc)
+        self.time_lived = now_utc - self.selected_guest.check_in
         total_minutes = int(self.time_lived.total_seconds() // 60)
         hours = total_minutes // 60
-        self.selected_guest.calculate_debt(hours)
         minutes = total_minutes % 60
         self.name_label.setText(f"Имя: {self.selected_guest.name}")
+        self.id_label.setText(f"ID: {self.selected_guest.guest_id}")
         self.guest_room_label.setText(f"Проживает в комнате №{selected_room.number} '{selected_room.room_type}'")
         self.check_in_label.setText(f"Время заселения: {self.selected_guest.check_in.strftime('%H:%M')}")
         #self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
@@ -240,10 +244,9 @@ class MainWindow(QMainWindow):
         all_time_button = QPushButton("За все время")
 
         def one_hour():
-            if self.selected_guest.debt["wood"] >= self.selected_guest.payment["wood"] and self.selected_guest.debt["stone"] >= self.selected_guest.payment["stone"] and self.selected_guest.debt["metal"] >= self.selected_guest.payment["metal"]:
-                self.selected_guest.debt["wood"] -= self.selected_guest.payment["wood"]
-                self.selected_guest.debt["stone"] -= self.selected_guest.payment["stone"]
-                self.selected_guest.debt["metal"] -= self.selected_guest.payment["metal"]
+            pay = self.manager.pay_debt(self.selected_guest.guest_id, self.selected_guest.payment["wood"],
+                                        self.selected_guest.payment["stone"], self.selected_guest.payment["metal"])
+            if pay:
                 self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
                 self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
                 self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
@@ -256,7 +259,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     dialog,
                     "Ошибка",
-                    "Долг не может опуститься ниже нуля"
+                    "Долг не был списан"
                 )
 
         def all_time():
@@ -276,19 +279,36 @@ class MainWindow(QMainWindow):
             sure_label = QLabel(f"Вы уверены что хотите списать весь долг {self.selected_guest.name}?")
 
             def yes():
-                self.selected_guest.debt["wood"] = 0
-                self.selected_guest.debt["stone"] = 0
-                self.selected_guest.debt["metal"] = 0
-                self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
-                self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
-                self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
-                QMessageBox.information(
-                    dialog,
-                    "Успех",
-                    "Весь долг был списан!"
-                )
-                dialog1.accept()
-                dialog.accept()
+                if self.selected_guest.debt["wood"] == 0 and self.selected_guest.debt["stone"] == 0 and self.selected_guest.debt["metal"] == 0:
+                    QMessageBox.warning(
+                        dialog,
+                        "Ошибка",
+                        "У выбранного гостя нет долга!"
+                    )
+                    dialog1.accept()
+                    dialog.accept()
+                else:
+                    pay = self.manager.pay_debt(self.selected_guest.guest_id, self.selected_guest.debt["wood"],
+                                                self.selected_guest.debt["stone"], self.selected_guest.debt["metal"])
+                    if pay:
+                        self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
+                        self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
+                        self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
+                        QMessageBox.information(
+                            dialog,
+                            "Успех",
+                            "Весь долг был списан!"
+                        )
+                        dialog1.accept()
+                        dialog.accept()
+                    else:
+                        QMessageBox.warning(
+                            dialog,
+                            "Ошибка",
+                            "Долг не был списан!"
+                        )
+                        dialog1.accept()
+                        dialog.accept()
             def no():
                 dialog1.accept()
                 dialog.accept()
@@ -305,7 +325,6 @@ class MainWindow(QMainWindow):
 
             dialog1.setLayout(layout)
             dialog1.exec_()
-
 
         one_hour_button.clicked.connect(one_hour)
         all_time_button.clicked.connect(all_time)
@@ -332,12 +351,14 @@ class MainWindow(QMainWindow):
             h5 = QHBoxLayout()
 
             # лейблы
+            name_label = QLabel("Новое имя:")
             wood_label = QLabel("Дерево в час:")
             stone_label = QLabel("Камень в час:")
             metal_label = QLabel("Металл в час:")
             room_label = QLabel("Комната:")
 
             #Ввод инфы
+            name_line = QLineEdit(self.selected_guest.name)
             wood_line = QLineEdit()
             stone_line = QLineEdit()
             metal_line = QLineEdit()
@@ -348,63 +369,47 @@ class MainWindow(QMainWindow):
             self.acchange_button = QPushButton("Подтвердить")
 
             def change():
+                name = name_line.text()
                 wood = wood_line.text()
                 stone = stone_line.text()
                 metal = metal_line.text()
                 room_type = combo.currentText()
-                if wood.isdigit() and stone.isdigit() and metal.isdigit():
-                    if not room_type == "Та же комната":
-                        room = Manager.find_free_room(room_type)
-                        if room is None:
-                            QMessageBox.warning(
-                                dialog,
-                                "Ошибка",
-                                "Комнаты с таким типом нет. Измените тип комнаты либо добавьте новую"
-                            )
-                        else:
-                            self.selected_guest.payment["wood"] = int(wood)
-                            self.selected_guest.payment["stone"] = int(stone)
-                            self.selected_guest.payment["metal"] = int(metal)
-                            self.selected_guest.room.guest = None
-                            self.selected_guest.room = room
-                            room.guest = self.selected_guest
-                            self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
-                            self.stone_label.setText(f"Камень: {self.selected_guest.payment["stone"]}")
-                            self.metal_label.setText(f"Металл: {self.selected_guest.payment["metal"]}")
-                            QMessageBox.information(
-                                dialog,
-                                "Успешно",
-                                "Гость был успешно изменен!"
-                            )
-                            dialog.accept()
+                if wood.isdigit() and stone.isdigit() and metal.isdigit() and name.strip() != "":
+                    update = self.manager.change_guest(self.selected_guest.guest_id, name, int(wood),
+                    int(stone), int(metal), room_type)
+                    if update == False:
+                        QMessageBox.warning(
+                            dialog,
+                            "Ошибка",
+                            "Комнаты с таким типом нет. Измените тип комнаты либо добавьте новую"
+                        )
                     else:
-                        self.selected_guest.payment["wood"] = int(wood)
-                        self.selected_guest.payment["stone"] = int(stone)
-                        self.selected_guest.payment["metal"] = int(metal)
-                        self.wood_label.setText(f"Дерево: {self.selected_guest.payment["wood"]}")
-                        self.stone_label.setText(f"Камень: {self.selected_guest.payment["stone"]}")
-                        self.metal_label.setText(f"Металл: {self.selected_guest.payment["metal"]}")
+                        item = self.guests_list.currentItem()
+                        item.setText(f"{self.selected_guest.name} Д/ч:{self.selected_guest.payment["wood"]}, К/ч:{self.selected_guest.payment["stone"]}, М/ч: {self.selected_guest.payment["metal"]}")
+                        self.name_label.setText(f"Имя: {self.selected_guest.name}")
+                        self.id_label.setText(f"ID: {self.selected_guest.guest_id}")
+                        self.guest_room_label.setText(f"Проживает в комнате №{self.selected_guest.room.number} '{self.selected_guest.room.room_type}'")
+                        self.wood_label.setText(f"Должен дерева: {self.selected_guest.debt["wood"]}")
+                        self.stone_label.setText(f"Должен камня: {self.selected_guest.debt["stone"]}")
+                        self.metal_label.setText(f"Должен металла: {self.selected_guest.debt["metal"]}")
                         QMessageBox.information(
                             dialog,
                             "Успешно",
                             "Гость был успешно изменен!"
                         )
                         dialog.accept()
-                else:
-                    QMessageBox.warning(
-                        dialog,
-                        "Ошибка",
-                        "Вы ввели некорректные данные"
-                    )
+
 
             self.acchange_button.clicked.connect(change)
-
             layout.addLayout(h1)
             layout.addLayout(h2)
             layout.addLayout(h3)
             layout.addLayout(h4)
             layout.addLayout(h5)
 
+
+            h1.addWidget(name_label)
+            h1.addWidget(name_line)
             h2.addWidget(wood_label)
             h2.addWidget(wood_line)
             h3.addWidget(stone_label)
@@ -453,31 +458,24 @@ class MainWindow(QMainWindow):
 
         def add():
             name = name_line.text()
-
             wood = wood_line.text()
             stone = stone_line.text()
             metal = metal_line.text()
-            if not name == "" and not name == " " and wood.isdigit() and stone.isdigit() and metal.isdigit():
+            if not name.strip() == "" and wood.isdigit() and stone.isdigit() and metal.isdigit():
                 room_type = combo.currentText()
-                room = Manager.find_free_room(room_type)
-                if room is None:
+                payment = [wood, stone, metal]
+                guest = self.manager.add_guest(name, payment, room_type)
+                if guest is None:
                     QMessageBox.warning(
                         dialog,
                         "Ошибка",
                         "Комнаты с таким типом нет. Измените тип комнаты либо добавьте новую"
                     )
                 else:
-                    guest = Guest(name)
-                    self.manager.total_guests.append(guest)
                     item = QListWidgetItem()
                     item.setData(Qt.UserRole, guest)
-                    item.setText(f"{self.guests_list.count() + 1}: {guest.name}")
+                    item.setText(f"{guest.name}: Д/ч:{guest.payment["wood"]}, К/ч:{guest.payment["stone"]}, М/ч: {guest.payment["metal"]}")
                     self.guests_list.addItem(item)
-                    guest.payment["wood"] = int(wood)
-                    guest.payment["stone"] = int(stone)
-                    guest.payment["metal"] = int(metal)
-                    guest.room = room
-                    room.guest = guest
                     self.room_guests.setText(f"Проживает: {guest.name}")
                     QMessageBox.information(
                         dialog,
@@ -531,23 +529,31 @@ class MainWindow(QMainWindow):
         sure_label = QLabel(f"Вы уверены что хотите удалить {self.selected_guest.name}?")
 
         def yes():
-            item = self.guests_list.currentItem()
-            self.manager.total_guests.remove(self.selected_guest)
-            self.guests_list.takeItem(self.guests_list.row(item))
-            self.selected_guest.room.guest = None
-            self.name_label.setText("")
-            self.guest_room_label.setText("")
-            self.check_in_label.setText("")
-            self.wood_label.setText("")
-            self.stone_label.setText("")
-            self.metal_label.setText("")
-            self.time_lived_label.setText("")
-            QMessageBox.information(
-                dialog,
-                "Успешно",
-                "Гость был успешно удален!"
-            )
-            dialog.accept()
+            check_out = self.manager.delete_guest(self.selected_guest.guest_id)
+            if check_out == True:
+                item = self.guests_list.currentItem()
+                self.guests_list.takeItem(self.guests_list.row(item))
+                self.name_label.setText("")
+                self.id_label.setText("")
+                self.guest_room_label.setText("")
+                self.check_in_label.setText("")
+                self.wood_label.setText("")
+                self.stone_label.setText("")
+                self.metal_label.setText("")
+                self.time_lived_label.setText("")
+                QMessageBox.information(
+                    dialog,
+                    "Успешно",
+                    "Гость был успешно удален!"
+                )
+                dialog.accept()
+            else:
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка",
+                    "Не удалось удалить гостя!"
+                )
+
 
         def no():
             dialog.accept()
@@ -570,7 +576,7 @@ class MainWindow(QMainWindow):
         self.selected_room = item.data(Qt.UserRole)
         self.check_object = 1
         self.room_number.setText(f"Номер: {self.selected_room.number}")
-        self.room_type.setText(f"Тип: {self.selected_room.room_type}")
+        self.room_type.setText(f"Тип: {self.selected_room.room_type}, {self.selected_room.is_active}")
         self.room_password.setText(f"Пароль: {self.selected_room.password}")
         self.room_guests.setText(f"Проживает: {self.selected_room.guest}")
 
@@ -579,24 +585,44 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Изменить пароль")
         dialog.setStyleSheet(DIALOG_STYLE)
 
-        layout = QHBoxLayout()
+        h1 = QHBoxLayout()
+        h2 = QHBoxLayout()
+        h3 = QHBoxLayout()
 
         password_label = QLabel("Пароль: ")
-
         password_line = QLineEdit()
+
+        combo_label = QLabel("Тип:")
+        combo = QComboBox()
+        combo.addItems(["Тот же тип", "Нищий", "Стандарт", "Стандарт+"])
+
+        layout = QVBoxLayout()
+
 
         self.acchange_button = QPushButton("Подтвердить")
 
         def change():
             if password_line.text().isdigit() and len(password_line.text()) == 4:
-                self.selected_room.password = password_line.text()
-                self.room_password.setText(f"Пароль: {self.selected_room.password}")
-                QMessageBox.information(
-                    dialog,
-                    "Успех",
-                    "Пароль изменен!"
-                )
-                dialog.accept()
+                password = password_line.text()
+                update = self.manager.change_room(self.selected_room.number, int(password), combo.currentText())
+                if update:
+                    item = self.rooms_list.currentItem()
+                    item.setText(f"№ {self.selected_room.number} — {self.selected_room.room_type}")
+                    self.room_password.setText(f"Пароль: {self.selected_room.password}")
+                    self.room_type.setText(f"Тип: {self.selected_room.room_type}, {self.selected_room.is_active}")
+
+                    QMessageBox.information(
+                        dialog,
+                        "Успех",
+                        "Комната изменена!"
+                    )
+                    dialog.accept()
+                else:
+                    QMessageBox.warning(
+                        dialog,
+                        "Неудача",
+                        "Комната не изменена!"
+                    )
             else:
                 QMessageBox.warning(
                     dialog,
@@ -606,9 +632,15 @@ class MainWindow(QMainWindow):
 
         self.acchange_button.clicked.connect(change)
 
-        layout.addWidget(password_label)
-        layout.addWidget(password_line)
-        layout.addWidget(self.acchange_button)
+        h1.addWidget(password_label)
+        h1.addWidget(password_line)
+        h2.addWidget(combo_label)
+        h2.addWidget(combo)
+        h3.addWidget(self.acchange_button)
+
+        layout.addLayout(h1)
+        layout.addLayout(h2)
+        layout.addLayout(h3)
 
         dialog.setLayout(layout)
         dialog.exec_()
@@ -647,7 +679,8 @@ class MainWindow(QMainWindow):
             password = password_line.text()
             room_type = combo.currentText()
             if number.isdigit() and password.isdigit() and len(password) == 4:
-                if any(str(r.number) == number for r in self.manager.rooms):
+                room = self.manager.add_room(int(number), room_type, password)
+                if room is None:
                     QMessageBox.warning(
                         dialog,
                         "Ошибка",
@@ -655,13 +688,10 @@ class MainWindow(QMainWindow):
                     )
                     return
                 else:
-                    room = Room(number, room_type)
-                    room.password = password
-                    self.manager.rooms.append(room)
                     item = QListWidgetItem()
                     item.setData(Qt.UserRole, room)
                     self.rooms_list.addItem(item)
-                    item.setText(f"{self.rooms_list.count()}: {room.room_type}")
+                    item.setText(f"№ {room.number} — {room.room_type}")
                     QMessageBox.information(
                         dialog,
                         "Успех",
@@ -706,8 +736,9 @@ class MainWindow(QMainWindow):
 
         def yes():
             item = self.rooms_list.currentItem()
-            if self.selected_room.guest is None:
-                Manager.rooms.remove(self.selected_room)
+            delete = self.manager.delete_room(self.selected_room.number)
+
+            if delete == True:
                 self.rooms_list.takeItem(self.rooms_list.row(item))
                 self.room_number.setText("")
                 self.room_type.setText("")
@@ -720,30 +751,12 @@ class MainWindow(QMainWindow):
                 )
                 dialog.accept()
             else:
-                new_room = Manager.find_free_room(self.selected_room.room_type)
-                if new_room is None:
-                    QMessageBox.warning(
-                        dialog,
-                        "Ошибка",
-                        "Перед удалением этой комнаты, создайте комнату для текущего жителя такого же типа"
-                    )
-                    dialog.accept()
-                elif not new_room is None:
-                    homeless = self.selected_room.guest
-                    Manager.rooms.remove(self.selected_room)
-                    self.rooms_list.takeItem(self.rooms_list.row(item))
-                    homeless.room = new_room
-                    new_room.guest = homeless
-                    self.room_number.setText("")
-                    self.room_type.setText("")
-                    self.room_password.setText("")
-                    self.room_guests.setText("")
-                    QMessageBox.information(
-                        dialog,
-                        "Успех",
-                        "Комната удалена!"
-                    )
-                    dialog.accept()
+                QMessageBox.warning(
+                    dialog,
+                    "Ошибка",
+                    "Перед удалением этой комнаты, создайте комнату для текущего жителя такого же типа"
+                )
+                dialog.accept()
         def no():
             dialog.accept()
 
@@ -759,3 +772,4 @@ class MainWindow(QMainWindow):
 
         dialog.setLayout(layout)
         dialog.exec_()
+
